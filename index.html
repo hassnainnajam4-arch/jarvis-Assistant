@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#07111f">
+<meta name="description" content="Personal multilingual voice assistant">
+<link rel="manifest" href="manifest.json">
+<title>JARVIS Voice Assistant</title>
+<style>
+:root{color-scheme:dark;--bg:#07111f;--panel:#101f33;--line:#23415e;--cyan:#54d9f2;--muted:#9db2c8}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 50% 0,#173653 0,#07111f 55%);font:16px system-ui;color:#edf7ff;min-height:100vh}
+main{max-width:620px;margin:auto;padding:22px 18px 40px}
+header{text-align:center;padding:22px 0 14px}
+.orb{width:118px;height:118px;margin:0 auto 15px;border-radius:50%;border:1px solid #54d9f2;box-shadow:0 0 22px #2bc8ef66,inset 0 0 25px #2bc8ef33;display:grid;place-items:center;color:var(--cyan);font-size:42px;background:radial-gradient(circle,#163b58,#081522)}
+h1{font-size:28px;letter-spacing:5px;margin:5px 0}header p{color:var(--muted);margin:6px 0}
+.panel{background:#0e1d2edb;border:1px solid var(--line);border-radius:18px;padding:16px;margin:14px 0}
+label{display:block;font-size:13px;color:#b6cadd;margin:12px 0 6px}
+input,select,textarea{width:100%;background:#071522;color:#edf7ff;border:1px solid #29445f;border-radius:10px;padding:12px;font:inherit}
+button{border:0;border-radius:12px;padding:13px 16px;font:600 15px system-ui;cursor:pointer}
+.primary{background:linear-gradient(110deg,#37c9e8,#3f8fe8);color:#04101b}
+.secondary{background:#1b3148;color:#dff7ff;border:1px solid #34536d}
+.actions{display:flex;gap:10px;flex-wrap:wrap}.actions button{flex:1;min-width:120px}
+#talk{width:100%;height:58px;border-radius:30px;font-size:18px;margin:8px 0;background:linear-gradient(100deg,#24c5e8,#367fe9);color:#03111d}
+#talk.listening{background:#b13d62;color:white;box-shadow:0 0 20px #ef4c7966}
+#status{color:var(--cyan);text-align:center;min-height:24px;font-size:14px}
+#chat{display:flex;flex-direction:column;gap:10px;max-height:45vh;overflow:auto}
+.msg{padding:12px 14px;border-radius:14px;white-space:pre-wrap;line-height:1.5;overflow-wrap:anywhere}
+.user{background:#173b58;align-self:flex-end;max-width:90%}.bot{background:#142638;border:1px solid #29445f;align-self:flex-start;max-width:95%}
+.small{font-size:12px;color:var(--muted);line-height:1.45}
+.row{display:flex;align-items:center;gap:8px}.row input{width:auto}
+details summary{cursor:pointer;color:var(--cyan);font-weight:600}
+#manual{min-height:70px;resize:vertical}
+footer{text-align:center;color:#718da7;font-size:12px;margin-top:18px}
+</style>
+</head>
+<body>
+<main>
+<header>
+<div class="orb">✧</div>
+<h1>J.A.R.V.I.S</h1>
+<p>Your multilingual personal voice assistant</p>
+</header>
+
+<section class="panel">
+  <div id="status">Ready. Press the microphone and speak.</div>
+  <button id="talk">🎙️ Tap to Speak</button>
+  <div class="actions">
+    <button class="secondary" id="stop">Stop voice</button>
+    <button class="secondary" id="clear">Clear chat</button>
+  </div>
+  <label for="manual">Or type a message</label>
+  <textarea id="manual" placeholder="Type in Urdu, Roman Urdu, Sindhi or English…"></textarea>
+  <button class="primary" id="send" style="width:100%;margin-top:8px">Send message</button>
+</section>
+
+<section class="panel">
+  <strong>Conversation</strong>
+  <div id="chat" aria-live="polite" style="margin-top:12px"></div>
+</section>
+
+<section class="panel">
+  <details open>
+    <summary>Settings</summary>
+    <label for="key">OpenAI API key</label>
+    <input id="key" type="password" autocomplete="off" placeholder="Paste your API key">
+    <p class="small">Your key is saved only in this browser on this phone. Do not share it. API usage may cost money.</p>
+    <label for="model">AI model</label>
+    <select id="model"><option value="gpt-4o-mini">gpt-4o-mini (recommended)</option><option value="gpt-4.1-mini">gpt-4.1-mini</option></select>
+    <label for="stt">Speech recognition language</label>
+    <select id="stt">
+      <option value="ur-PK">Urdu (Pakistan)</option>
+      <option value="en-US">English</option>
+      <option value="sd-PK">Sindhi (if supported by your browser)</option>
+      <option value="en-IN">English (India; may help with Roman Urdu)</option>
+    </select>
+    <label for="voice">Speaking voice</label>
+    <select id="voice"><option value="auto">Female voice — automatic</option></select>
+    <div class="row" style="margin-top:12px"><input id="speak" type="checkbox" checked><label for="speak" style="margin:0">Speak answers aloud</label></div>
+    <button class="secondary" id="save" style="width:100%;margin-top:12px">Save settings</button>
+  </details>
+</section>
+<footer>Requires internet and an API key for AI replies. Microphone works best in Chrome over HTTPS.</footer>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+const chat=$('chat');
+let history=[];
+let recognition=null;
+let voices=[];
+const SYSTEM=`You are JARVIS, a helpful, accurate, friendly personal voice assistant. Understand Urdu, Roman Urdu, Sindhi, and English, including code-switching. Always reply in the same language and script style the user used most recently: Urdu script for Urdu script, Roman Urdu for Roman Urdu, Sindhi for Sindhi, and English for English. If the user mixes languages, naturally mirror the mix. Be concise unless asked for detail. Prioritize accuracy. Never invent facts, current information, citations, or capabilities. If unsure, say so clearly and ask a focused question.`;
+
+function status(s){$('status').textContent=s}
+function add(text,who){const d=document.createElement('div');d.className='msg '+who;d.textContent=text;chat.appendChild(d);chat.scrollTop=chat.scrollHeight}
+function saveSettings(){localStorage.setItem('jarvis_key',$('key').value.trim());localStorage.setItem('jarvis_model',$('model').value);localStorage.setItem('jarvis_stt',$('stt').value);localStorage.setItem('jarvis_speak',$('speak').checked?'1':'0');status('Settings saved on this phone.')}
+$('key').value=localStorage.getItem('jarvis_key')||'';
+$('model').value=localStorage.getItem('jarvis_model')||'gpt-4o-mini';
+$('stt').value=localStorage.getItem('jarvis_stt')||'ur-PK';
+$('speak').checked=(localStorage.getItem('jarvis_speak')??'1')==='1';
+$('save').onclick=saveSettings;
+
+function loadVoices(){
+ voices=window.speechSynthesis? speechSynthesis.getVoices():[];
+ const sel=$('voice');sel.innerHTML='<option value="auto">Female voice — automatic</option>';
+ voices.forEach((v,i)=>{const o=document.createElement('option');o.value=String(i);o.textContent=`${v.name} (${v.lang})`;sel.appendChild(o)});
+}
+if('speechSynthesis' in window){loadVoices();speechSynthesis.onvoiceschanged=loadVoices}
+function speak(text){
+ if(!$('speak').checked||!('speechSynthesis'in window))return;
+ speechSynthesis.cancel();
+ const u=new SpeechSynthesisUtterance(text);
+ const selected=$('voice').value;
+ let v=selected==='auto'?null:voices[Number(selected)];
+ if(!v){
+   const lang=/[\u0600-\u06FF]/.test(text)?'ur':(/[ء-ي]/.test(text)?'ur':(/[a-z]/i.test(text)?'en':'ur'));
+   v=voices.find(x=>x.lang.toLowerCase().startsWith(lang)&&/female|zira|sara|samantha|google.*urdu/i.test(x.name))
+     ||voices.find(x=>x.lang.toLowerCase().startsWith(lang))
+     ||voices.find(x=>/female|zira|samantha/i.test(x.name));
+ }
+ if(v)u.voice=v;
+ u.rate=1;u.pitch=1.03;speechSynthesis.speak(u);
+}
+async function ask(text){
+ text=text.trim();if(!text)return;
+ const key=$('key').value.trim();if(!key){status('Add your API key in Settings first.');return}
+ add(text,'user');$('manual').value='';history.push({role:'user',content:text});status('JARVIS is thinking…');
+ $('send').disabled=true;$('talk').disabled=true;
+ try{
+   const r=await fetch('https://api.openai.com/v1/responses',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},body:JSON.stringify({model:$('model').value,instructions:SYSTEM,input:history.slice(-20)})});
+   const data=await r.json();
+   if(!r.ok)throw new Error(data.error?.message||`API error ${r.status}`);
+   let answer=data.output_text;
+   if(!answer && data.output) answer=data.output.flatMap(x=>x.content||[]).filter(x=>x.type==='output_text').map(x=>x.text).join('\n');
+   if(!answer)throw new Error('No text response received.');
+   history.push({role:'assistant',content:answer});add(answer,'bot');speak(answer);status('Ready.');
+ }catch(e){history.pop();status('Error: '+e.message);add('Sorry, I could not answer. '+e.message,'bot')}
+ finally{$('send').disabled=false;$('talk').disabled=false}
+}
+$('send').onclick=()=>ask($('manual').value);
+$('manual').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();ask($('manual').value)}});
+$('clear').onclick=()=>{history=[];chat.innerHTML='';status('Chat cleared.')};
+$('stop').onclick=()=>{if(recognition)recognition.stop();if('speechSynthesis'in window)speechSynthesis.cancel();status('Voice stopped.')};
+
+const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;
+if(SpeechRecognition){
+ recognition=new SpeechRecognition();recognition.continuous=false;recognition.interimResults=false;
+ recognition.onstart=()=>{$('talk').classList.add('listening');$('talk').textContent='Listening… tap Stop to cancel';status('I am listening…')};
+ recognition.onend=()=>{$('talk').classList.remove('listening');$('talk').textContent='🎙️ Tap to Speak'};
+ recognition.onerror=e=>status('Microphone error: '+e.error+'. Check permission and internet.');
+ recognition.onresult=e=>{const t=e.results[0][0].transcript;status('Heard: '+t);ask(t)};
+ $('talk').onclick=()=>{try{recognition.lang=$('stt').value;recognition.start()}catch(e){status('Please wait a moment and try again.')}};
+}else{$('talk').disabled=true;$('talk').textContent='Speech recognition not supported';status('Use Chrome on Android, or type your message.')}
+if('serviceWorker'in navigator && location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js').catch(()=>{});
+</script>
+</body>
+</html>
